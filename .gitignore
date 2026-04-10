@@ -1,0 +1,23 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/*.db
+backend/*.sqlite
+backend/log.txt
+backend/payload.json
+
+# Node
+node_modules/
+frontend/node_modules/
+package-lock.json
+frontend/dist/
+
+# Environment
+.env
+backend/.env
+
+# OS
+.DS_Store
+Thumbs.db

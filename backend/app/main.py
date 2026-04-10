@@ -1,0 +1,173 @@
+import uuid
+from fastapi import FastAPI, Depends, HTTPException, Query, Response
+from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session, select
+from app.db.service import get_session, DBService, engine
+from app.db.models import Task, TaskStatus, PriorityLevel
+from app.schemas.task import TaskCreate, TaskResponse, CarbonStatus
+from app.core.carbon_service import CarbonService, UKCarbonProvider
+from app.agents.graph import app_graph
+from app.utils.security import verify_signature, generate_signature
+from app.utils.reporting import generate_certificate
+from app.core.config import settings
+from datetime import datetime
+import asyncio
+from sqlmodel import SQLModel
+
+app = FastAPI(title="Green-Compute API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+carbon_service = CarbonService(UKCarbonProvider())
+
+async def internal_worker_loop():
+    """Simple background loop that replaces Arq/Redis for local development."""
+    while True:
+        try:
+            print("Internal Worker: Checking and resuming tasks...")
+            current_intensity = await carbon_service.provider.get_current_intensity()
+            p30 = await carbon_service.provider.get_p30_threshold()
+            
+            with Session(engine) as session:
+                db = DBService(session)
+                statement = select(Task).where(Task.status == TaskStatus.PAUSED)
+                paused_tasks = session.exec(statement).all()
+                
+                for task in paused_tasks:
+                    is_overdue = datetime.utcnow() >= task.deadline
+                    is_green = current_intensity <= p30
+                    
+                    if is_green or is_overdue:
+                        task.status = TaskStatus.RUNNING
+                        session.add(task)
+                        session.commit()
+                        
+                        config = {"configurable": {"thread_id": task.request_id}}
+                        await app_graph.ainvoke(None, config=config)
+                        db.log_event(task.id, "RESUMED", current_intensity, message="Resumed by internal worker")
+            
+            await asyncio.sleep(60) # Check every 1 minute
+        except Exception as e:
+            print(f"Worker Error: {e}")
+            await asyncio.sleep(10)
+
+@app.on_event("startup")
+async def on_startup():
+    # Initialize DB tables
+    SQLModel.metadata.create_all(engine)
+    
+    # Start internal worker if enabled
+    if settings.INTERNAL_WORKER:
+        asyncio.create_task(internal_worker_loop())
+
+@app.get("/carbon", response_model=CarbonStatus)
+async def get_carbon_status():
+    current = await carbon_service.provider.get_current_intensity()
+    p30 = await carbon_service.provider.get_p30_threshold()
+    return {
+        "current": current,
+        "p30_threshold": p30,
+        "is_green": current <= p30,
+        "forecast_summary": f"Next 48h P30 is {p30} gCO2/kWh"
+    }
+
+import json
+
+@app.post("/tasks", response_model=TaskResponse)
+async def submit_task(request: TaskCreate, session: Session = Depends(get_session)):
+    db = DBService(session)
+    request_id = str(uuid.uuid4())
+    
+    # Get initial metrics
+    current_intensity = await carbon_service.provider.get_current_intensity()
+    p30 = await carbon_service.provider.get_p30_threshold()
+    
+    # Create Task 
+    # SQLite requires dict payload to be dumped to a string since JSON schema column type is being mocked
+    task_payload_str = json.dumps(request.payload) if isinstance(request.payload, dict) else str(request.payload)
+
+    task = Task(
+        request_id=request_id,
+        priority=request.priority,
+        input_data=task_payload_str,
+        status=TaskStatus.QUEUED,
+        p30_threshold=p30,
+        baseline_emissions=15.0, # Simulated baseline
+        signature=generate_signature(request_id)
+    )
+    db.create_task(task)
+    db.log_event(task.id, "SUBMITTED", current_intensity, message="Task queued for processing")
+    
+    # Launch LangGraph Workflow
+    config = {"configurable": {"thread_id": request_id}}
+    state_input = {
+        "task_id": task.id,
+        "request_id": request_id,
+        "priority": request.priority,
+        "input_data": request.payload,
+        "is_urgent": request.priority == "urgent",
+        "logs": []
+    }
+    
+    # Execute graph (this might pause at scheduler)
+    final_state = await app_graph.ainvoke(state_input, config=config)
+    
+    # Update task based on final state
+    updated_task = db.get_task(request_id)
+    if final_state.get("is_paused"):
+        updated_task.status = TaskStatus.PAUSED
+    elif final_state.get("output"):
+        updated_task.status = TaskStatus.COMPLETED
+        updated_task.result = json.dumps({"output": final_state["output"]})
+        updated_task.completed_at = datetime.utcnow()
+        updated_task.carbon_saved = final_state.get("emissions_saved", 0)
+        updated_task.actual_emissions = updated_task.baseline_emissions - updated_task.carbon_saved
+    
+    session.add(updated_task)
+    session.commit()
+    session.refresh(updated_task)
+    
+    return updated_task
+
+@app.get("/tasks/{request_id}", response_model=TaskResponse)
+async def get_task_status(request_id: str, session: Session = Depends(get_session)):
+    db = DBService(session)
+    task = db.get_task(request_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+@app.get("/verify/{request_id}")
+async def verify_task(request_id: str, sig: str, session: Session = Depends(get_session)):
+    if not verify_signature(request_id, sig):
+        raise HTTPException(status_code=403, detail="Invalid signature")
+    
+    db = DBService(session)
+    task = db.get_task(request_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    return {
+        "status": "Verified",
+        "task_id": task.request_id,
+        "carbon_saved": f"{task.carbon_saved} g",
+        "executed_at": task.completed_at,
+        "authenticity": "High (Signed by Green-Compute Core)"
+    }
+
+@app.get("/certificate/{request_id}")
+async def get_pdf_certificate(request_id: str, session: Session = Depends(get_session)):
+    db = DBService(session)
+    task = db.get_task(request_id)
+    if not task or task.status != TaskStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Certificate only available for completed tasks")
+    
+    pdf_content = generate_certificate(task.dict())
+    return Response(content=pdf_content, media_type="application/pdf", headers={
+        "Content-Disposition": f"attachment; filename=ESG_Certificate_{request_id}.pdf"
+    })
