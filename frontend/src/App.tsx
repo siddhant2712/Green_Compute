@@ -86,7 +86,7 @@ const App: React.FC = () => {
             Intelligence, <br />naturally.
           </h2>
           <p className="text-xl text-slate-400 max-w-2xl mx-auto font-medium tracking-tight">
-            The world's most advanced carbon-aware orchestration engine.
+            Carbon-aware AI orchestration powered by adaptive scheduling.
           </p>
         </motion.div>
 
