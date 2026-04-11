@@ -131,9 +131,21 @@ const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission
                     {getStatusIcon(task.status)}
                   </div>
                   <div>
-                    <p className="font-mono text-[10px] text-slate-500 mb-1 tracking-widest">{task.request_id.slice(0, 8)}</p>
-                    <p className="text-sm font-semibold text-slate-200">
-                      {task.priority === 'urgent' ? '⚡ Priority Pipeline' : '🌱 Green Scheduler'}
+                    <p className="font-mono text-[9px] text-slate-500 mb-0.5 tracking-widest uppercase opacity-60">ID: {task.request_id.slice(0, 8)}</p>
+                    <p className="text-sm font-bold text-white mb-1 line-clamp-1">
+                      {(() => {
+                        try {
+                          const data = JSON.parse(task.input_data as string);
+                          return data.prompt || "AI Workload";
+                        } catch {
+                          return "AI Workload";
+                        }
+                      })()}
+                    </p>
+                    <p className="text-[10px] font-medium text-slate-500 flex items-center gap-2">
+                       {task.priority === 'urgent' ? '⚡ Urgent Priority' : '🌱 Carbon-Aware'}
+                       <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                       {new Date(task.created_at || "").toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
