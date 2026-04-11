@@ -12,6 +12,7 @@ interface Props {
 
 const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission' }) => {
   const [prompt, setPrompt] = useState('');
+  const [taskName, setTaskName] = useState('');
   const [priority, setPriority] = useState('deferrable');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -21,9 +22,10 @@ const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission
     
     setIsSubmitting(true);
     try {
-      const task = await submitTask(priority, { prompt });
+      const task = await submitTask(priority, { prompt, name: taskName });
       onTaskSubmitted(task);
       setPrompt('');
+      setTaskName('');
     } catch (err) {
       console.error(err);
     } finally {
@@ -57,12 +59,21 @@ const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission
             New Workload
           </h2>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the AI task (e.g., Generate a research report on carbon-aware systems...)"
-              className="w-full bg-white/5 border border-white/10 rounded-[32px] p-8 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-white/20 min-h-[160px] resize-none backdrop-blur-md transition-all text-lg leading-relaxed"
-            />
+            <div className="flex flex-col gap-4">
+              <input
+                type="text"
+                value={taskName}
+                onChange={(e) => setTaskName(e.target.value)}
+                placeholder="Task Name (e.g. My Demo Job)"
+                className="w-full bg-white/5 border border-white/10 rounded-full py-4 px-8 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-white/20 backdrop-blur-md transition-all font-semibold"
+              />
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe the AI task (e.g., Generate a research report on carbon-aware systems...)"
+                className="w-full bg-white/5 border border-white/10 rounded-[32px] p-8 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-white/20 min-h-[160px] resize-none backdrop-blur-md transition-all text-lg leading-relaxed"
+              />
+            </div>
             <div className="flex flex-col md:flex-row items-center justify-center gap-4">
               <div className="relative w-full md:w-auto">
                 <select
@@ -136,7 +147,7 @@ const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission
                       {(() => {
                         try {
                           const data = JSON.parse(task.input_data as string);
-                          return data.prompt || "AI Workload";
+                          return data.name || data.prompt || "AI Workload";
                         } catch {
                           return "AI Workload";
                         }

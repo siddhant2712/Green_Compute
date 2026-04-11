@@ -25,7 +25,7 @@ const ActiveTasksCard: React.FC<Props> = ({ tasks }) => {
   const parseName = (inputData: string) => {
     try {
       const data = JSON.parse(inputData);
-      return data.prompt || "AI Workload";
+      return data.name || data.prompt || "AI Workload";
     } catch {
       return "AI Workload";
     }

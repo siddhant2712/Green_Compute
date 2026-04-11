@@ -17,6 +17,7 @@ export interface TaskResponse {
   request_id: string;
   status: string;
   priority: string;
+  input_data: string | null;
   current_intensity: number | null;
   p30_threshold: number | null;
   emissions_saved: number;

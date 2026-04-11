@@ -139,6 +139,7 @@ async def submit_task(request: TaskCreate, session: Session = Depends(get_sessio
         "priority": updated_task.priority.value,
         "current_intensity": current_intensity,
         "p30_threshold": updated_task.p30_threshold,
+        "input_data": updated_task.input_data,
         "emissions_saved": updated_task.carbon_saved,
         "created_at": updated_task.created_at,
     }
@@ -155,6 +156,7 @@ async def get_task_status(request_id: str, session: Session = Depends(get_sessio
         "priority": task.priority.value,
         "current_intensity": None,
         "p30_threshold": task.p30_threshold,
+        "input_data": task.input_data,
         "emissions_saved": task.carbon_saved,
         "created_at": task.created_at,
     }
@@ -171,6 +173,7 @@ async def list_tasks(session: Session = Depends(get_session)):
             "priority": t.priority.value,
             "current_intensity": None,
             "p30_threshold": t.p30_threshold,
+            "input_data": t.input_data,
             "emissions_saved": t.carbon_saved,
             "created_at": t.created_at,
         }
