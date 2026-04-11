@@ -3,7 +3,7 @@ import { Shield, BarChart3, CloudRain } from 'lucide-react';
 import { motion } from 'framer-motion';
 import CarbonWidget from './components/CarbonWidget';
 import TaskBoard from './components/TaskBoard';
-import { getCarbonStatus } from './api';
+import { getCarbonStatus, getTasks } from './api';
 import type { CarbonStatus, TaskResponse } from './api';
 
 const App: React.FC = () => {
@@ -20,9 +20,19 @@ const App: React.FC = () => {
     }
   };
 
+  const loadTasks = async () => {
+    try {
+      const existing = await getTasks();
+      setTasks(existing);
+    } catch (err) {
+      console.error("Failed to load tasks", err);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 30000); // Pulse every 30s
+    loadTasks();  // Restore tasks from DB on mount
+    const interval = setInterval(fetchStatus, 30000);
     return () => clearInterval(interval);
   }, []);
 

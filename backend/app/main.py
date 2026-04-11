@@ -132,7 +132,16 @@ async def submit_task(request: TaskCreate, session: Session = Depends(get_sessio
     session.commit()
     session.refresh(updated_task)
     
-    return updated_task
+    # Manually build the response to map ORM field names to the API schema
+    return {
+        "request_id": updated_task.request_id,
+        "status": updated_task.status.value,
+        "priority": updated_task.priority.value,
+        "current_intensity": current_intensity,
+        "p30_threshold": updated_task.p30_threshold,
+        "emissions_saved": updated_task.carbon_saved,
+        "created_at": updated_task.created_at,
+    }
 
 @app.get("/tasks/{request_id}", response_model=TaskResponse)
 async def get_task_status(request_id: str, session: Session = Depends(get_session)):
@@ -140,7 +149,34 @@ async def get_task_status(request_id: str, session: Session = Depends(get_sessio
     task = db.get_task(request_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    return {
+        "request_id": task.request_id,
+        "status": task.status.value,
+        "priority": task.priority.value,
+        "current_intensity": None,
+        "p30_threshold": task.p30_threshold,
+        "emissions_saved": task.carbon_saved,
+        "created_at": task.created_at,
+    }
+
+@app.get("/tasks", response_model=list[TaskResponse])
+async def list_tasks(session: Session = Depends(get_session)):
+    """Returns all tasks ordered by most recently created, for frontend state restore on reload."""
+    statement = select(Task).order_by(Task.created_at.desc())
+    tasks = session.exec(statement).all()
+    return [
+        {
+            "request_id": t.request_id,
+            "status": t.status.value,
+            "priority": t.priority.value,
+            "current_intensity": None,
+            "p30_threshold": t.p30_threshold,
+            "emissions_saved": t.carbon_saved,
+            "created_at": t.created_at,
+        }
+        for t in tasks
+    ]
+
 
 @app.get("/verify/{request_id}")
 async def verify_task(request_id: str, sig: str, session: Session = Depends(get_session)):
@@ -167,7 +203,18 @@ async def get_pdf_certificate(request_id: str, session: Session = Depends(get_se
     if not task or task.status != TaskStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Certificate only available for completed tasks")
     
-    pdf_content = generate_certificate(task.dict())
+    task_data = {
+        "request_id": task.request_id,
+        "status": task.status.value,
+        "priority": task.priority.value,
+        "intensity_at_execution": task.p30_threshold,   # best proxy available
+        "baseline_emissions": task.baseline_emissions,
+        "actual_emissions": task.actual_emissions,
+        "carbon_saved": task.carbon_saved,
+        "signature": task.signature,
+    }
+    
+    pdf_content = generate_certificate(task_data)
     return Response(content=pdf_content, media_type="application/pdf", headers={
         "Content-Disposition": f"attachment; filename=ESG_Certificate_{request_id}.pdf"
     })

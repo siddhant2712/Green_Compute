@@ -1,8 +1,8 @@
 import qrcode
+import os
 from io import BytesIO
 from fpdf import FPDF
 from app.utils.security import generate_signature
-from app.core.config import settings
 
 def create_qr_code(task_id: str, signature: str) -> BytesIO:
     """Generates a QR code pointing to the verification URL."""
@@ -35,33 +35,43 @@ def generate_certificate(task_data: dict) -> bytes:
     pdf.set_font("Arial", size=12)
     
     # Task Info
-    pdf.cell(200, 10, txt=f"Task ID: {task_data['request_id']}", ln=True)
-    pdf.cell(200, 10, txt=f"Status: {task_data['status']}", ln=True)
-    pdf.cell(200, 10, txt=f"Priority: {task_data['priority']}", ln=True)
+    pdf.cell(200, 10, txt=f"Task ID: {task_data.get('request_id', 'N/A')}", ln=True)
+    pdf.cell(200, 10, txt=f"Status: {task_data.get('status', 'completed')}", ln=True)
+    pdf.cell(200, 10, txt=f"Priority: {task_data.get('priority', 'deferrable')}", ln=True)
     pdf.ln(5)
     
     # Carbon Metrics
     pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 10, txt=f"Carbon Performance:", ln=True)
+    pdf.cell(200, 10, txt="Carbon Performance:", ln=True)
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt=f"- Carbon Intensity at Execution: {task_data['intensity_at_execution']} gCO2/kWh", ln=True)
-    pdf.cell(200, 10, txt=f"- CO2 Baseline (Immediate): {task_data['baseline_emissions']} g", ln=True)
-    pdf.cell(200, 10, txt=f"- CO2 Actual (Optimized): {task_data['actual_emissions']} g", ln=True)
-    pdf.set_text_color(0, 128, 0) # Green
-    pdf.cell(200, 10, txt=f"- Net Carbon Saved: {task_data['carbon_saved']} g", ln=True)
-    pdf.set_text_color(0, 0, 0) # Black
-    
+    pdf.cell(200, 10, txt=f"- Grid Intensity at Scheduling: {task_data.get('intensity_at_execution', 'N/A')} gCO2/kWh", ln=True)
+    pdf.cell(200, 10, txt=f"- CO2 Baseline (Immediate): {task_data.get('baseline_emissions', 0):.1f} g", ln=True)
+    pdf.cell(200, 10, txt=f"- CO2 Actual (Optimized): {task_data.get('actual_emissions', 0):.1f} g", ln=True)
+    pdf.set_text_color(0, 128, 0)  # Green
+    pdf.cell(200, 10, txt=f"- Net Carbon Saved: {task_data.get('carbon_saved', 0):.1f} g", ln=True)
+    pdf.set_text_color(0, 0, 0)  # Black
+
     # QR Code
-    signature = generate_signature(task_data['request_id'])
-    qr_img = create_qr_code(task_data['request_id'], signature)
+    request_id = task_data.get('request_id', 'unknown')
+    signature = task_data.get('signature') or generate_signature(request_id)
+    qr_img = create_qr_code(request_id, signature)
     
     # Save QR temp
-    with open("temp_qr.png", "wb") as f:
+    qr_path = "temp_qr.png"
+    with open(qr_path, "wb") as f:
         f.write(qr_img.getbuffer())
-        
-    pdf.image("temp_qr.png", x=150, y=50, w=40)
+    
+    pdf.image(qr_path, x=150, y=50, w=40)
     pdf.ln(20)
     pdf.set_font("Arial", 'I', 10)
-    pdf.multi_cell(0, 10, "This certificate verifies that the AI task was computed during a window of high grid renewable energy penetration, significantly reducing its environment impact.")
+    pdf.multi_cell(0, 10, "This certificate verifies that the AI task was computed during a window of high grid renewable energy penetration, significantly reducing its environmental impact.")
 
-    return pdf.output(dest='S')
+    # Clean up temp file
+    try:
+        os.remove(qr_path)
+    except Exception:
+        pass
+
+    # fpdf2 returns bytearray from output(dest='S'); convert to bytes for FastAPI Response
+    result = pdf.output(dest='S')
+    return bytes(result) if not isinstance(result, bytes) else result

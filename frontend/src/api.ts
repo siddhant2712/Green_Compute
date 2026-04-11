@@ -38,3 +38,9 @@ export const getTaskStatus = async (requestId: string) => {
   const response = await api.get<TaskResponse>(`/tasks/${requestId}`);
   return response.data;
 };
+
+export const getTasks = async (): Promise<TaskResponse[]> => {
+  const response = await api.get<TaskResponse[]>('/tasks');
+  return response.data;
+};
+
