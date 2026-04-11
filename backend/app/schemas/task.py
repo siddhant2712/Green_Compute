@@ -14,6 +14,7 @@ class TaskResponse(BaseModel):
     priority: str
     current_intensity: Optional[float] = None
     p30_threshold: Optional[float] = None
+    assigned_region: Optional[str] = None
     input_data: Optional[str] = None
     # The DB model stores this as `carbon_saved`; we expose it as `emissions_saved`
     emissions_saved: float = 0.0
@@ -30,6 +31,7 @@ class TaskResponse(BaseModel):
                 "priority": data.priority.value if hasattr(data.priority, "value") else data.priority,
                 "current_intensity": getattr(data, "current_intensity", None),
                 "p30_threshold": getattr(data, "p30_threshold", None),
+                "assigned_region": getattr(data, "assigned_region", "UK"),
                 "input_data": getattr(data, "input_data", None),
                 "emissions_saved": getattr(data, "carbon_saved", 0.0),
                 "created_at": data.created_at,
@@ -41,3 +43,4 @@ class CarbonStatus(BaseModel):
     p30_threshold: float
     is_green: bool
     forecast_summary: str
+    global_optimization: Optional[Dict[str, Any]] = None

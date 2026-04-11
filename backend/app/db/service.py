@@ -33,7 +33,7 @@ class DBService:
             self.session.add(task)
             self.session.commit()
 
-    def log_event(self, task_id: int, event_type: str, intensity: float, message: str = None):
-        event = TaskEvent(task_id=task_id, event_type=event_type, intensity=intensity, message=message)
+    def log_event(self, task_id: int, event_type: str, intensity: float, region: str = "UK", message: str = None):
+        event = TaskEvent(task_id=task_id, event_type=event_type, intensity=intensity, region=region, message=message)
         self.session.add(event)
         self.session.commit()

@@ -24,9 +24,15 @@ class Task(SQLModel, table=True):
     input_data: str = Field(sa_column=Field(JSON))
     result: Optional[str] = Field(default=None, sa_column=Field(JSON))
     
+    # Multi-Region Optimization
+    assigned_region: Optional[str] = Field(default="UK", index=True)
+    execution_region: Optional[str] = Field(default=None) # Final region where it actually ran
+    routing_logic: Optional[str] = Field(default=None)   # Explanation of why this region was picked
+    regional_intensities_snapshot: Optional[str] = Field(default=None, sa_column=Field(JSON)) # Intensity of all regions at dispatch
+    
     # Carbon Metrics
     p30_threshold: float = Field(default=0.0)
-    baseline_emissions: float = Field(default=0.0)  # gCO2 if run immediately
+    baseline_emissions: float = Field(default=0.0)  # gCO2 if run immediately (usually in UK)
     actual_emissions: float = Field(default=0.0)    # gCO2 actual
     carbon_saved: float = Field(default=0.0)
     
@@ -44,8 +50,9 @@ class Task(SQLModel, table=True):
 class TaskEvent(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     task_id: int = Field(foreign_key="task.id")
-    event_type: str  # PAUSED, RESUMED, COMPLETED, etc.
+    event_type: str  # PAUSED, RESUMED, COMPLETED, SWAPPED_REGION, etc.
     intensity: float # Carbon intensity at this event
+    region: str = Field(default="UK")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     message: Optional[str] = Field(default=None)
     
@@ -55,4 +62,4 @@ class CarbonHistory(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     timestamp: datetime = Field(index=True)
     intensity: float
-    region: str = Field(default="UK")
+    region: str = Field(index=True)

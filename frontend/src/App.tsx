@@ -20,10 +20,11 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [carbonStatus, setCarbonStatus] = useState<CarbonStatus | null>(null);
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState('UK');
 
-  const fetchStatus = async () => {
+  const fetchStatus = async (region?: string) => {
     try {
-      const status = await getCarbonStatus();
+      const status = await getCarbonStatus(region ?? selectedRegion);
       setCarbonStatus(status);
     } catch (err) {
       console.error("Failed to fetch carbon status", err);
@@ -47,7 +48,7 @@ const App: React.FC = () => {
       loadTasks();
     }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedRegion]);
 
   const handleTaskSubmitted = (task: TaskResponse) => {
     setTasks([task, ...tasks]);
@@ -56,7 +57,7 @@ const App: React.FC = () => {
   const renderActiveView = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <DashboardView status={carbonStatus} tasks={tasks} />;
+        return <DashboardView status={carbonStatus} tasks={tasks} selectedRegion={selectedRegion} onRegionChange={(r) => { setSelectedRegion(r); fetchStatus(r); }} />;
       case 'compute':
         return <ComputeView tasks={tasks} onTaskSubmitted={handleTaskSubmitted} />;
       case 'reports':
@@ -66,7 +67,7 @@ const App: React.FC = () => {
       case 'settings':
         return <PlaceholderView title="Compute Engine Settings" description="Configure API endpoints, regional nodes, and carbon thresholds." icon="settings" />;
       default:
-        return <DashboardView status={carbonStatus} tasks={tasks} />;
+        return <DashboardView status={carbonStatus} tasks={tasks} selectedRegion={selectedRegion} onRegionChange={(r) => { setSelectedRegion(r); fetchStatus(r); }} />;
     }
   };
 

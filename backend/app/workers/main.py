@@ -18,8 +18,9 @@ async def check_grid_and_resume(ctx):
     """
     print("Worker: Checking grid and processing paused tasks...")
     
-    current_intensity = await carbon_service.provider.get_current_intensity()
-    p30 = await carbon_service.provider.get_p30_threshold()
+    uk_provider = carbon_service.registry.providers["UK"]
+    current_intensity = await uk_provider.get_current_intensity()
+    p30 = await uk_provider.get_p30_threshold()
     
     with Session(engine) as session:
         db = DBService(session)

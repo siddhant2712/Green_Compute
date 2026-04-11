@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from app.db.service import get_session, DBService, engine
 from app.db.models import Task, TaskStatus, PriorityLevel
 from app.schemas.task import TaskCreate, TaskResponse, CarbonStatus
-from app.core.carbon_service import CarbonService, UKCarbonProvider
+from app.core.carbon_service import CarbonService, GlobalCarbonRegistry
 from app.agents.graph import app_graph
 from app.utils.security import verify_signature, generate_signature
 from app.utils.reporting import generate_certificate
@@ -23,15 +23,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-carbon_service = CarbonService(UKCarbonProvider())
+from app.core.registry import registry
+carbon_service = CarbonService(registry)
 
-async def internal_worker_loop():
+async def internal_worker_loop(registry: GlobalCarbonRegistry):
     """Simple background loop that replaces Arq/Redis for local development."""
     while True:
         try:
-            print("Internal Worker: Checking and resuming tasks...")
-            current_intensity = await carbon_service.provider.get_current_intensity()
-            p30 = await carbon_service.provider.get_p30_threshold()
+            print("Internal Worker: Checking and resuming tasks globally...")
+            # Fetch all intensities
+            intensities = await registry.get_all_intensities()
             
             with Session(engine) as session:
                 db = DBService(session)
@@ -39,6 +40,12 @@ async def internal_worker_loop():
                 paused_tasks = session.exec(statement).all()
                 
                 for task in paused_tasks:
+                    # Check the region this task was assigned to
+                    region = task.assigned_region or "UK"
+                    provider = registry.providers.get(region)
+                    p30 = await provider.get_p30_threshold()
+                    current_intensity = intensities.get(region, 200.0)
+                    
                     is_overdue = datetime.utcnow() >= task.deadline
                     is_green = current_intensity <= p30
                     
@@ -49,9 +56,9 @@ async def internal_worker_loop():
                         
                         config = {"configurable": {"thread_id": task.request_id}}
                         await app_graph.ainvoke(None, config=config)
-                        db.log_event(task.id, "RESUMED", current_intensity, message="Resumed by internal worker")
+                        db.log_event(task.id, "RESUMED", current_intensity, region=region, message=f"Resumed globally at region: {region}")
             
-            await asyncio.sleep(60) # Check every 1 minute
+            await asyncio.sleep(60) # Chick every 1 minute
         except Exception as e:
             print(f"Worker Error: {e}")
             await asyncio.sleep(10)
@@ -63,17 +70,29 @@ async def on_startup():
     
     # Start internal worker if enabled
     if settings.INTERNAL_WORKER:
-        asyncio.create_task(internal_worker_loop())
+        from app.core.registry import registry
+        asyncio.create_task(internal_worker_loop(registry))
 
-@app.get("/carbon", response_model=CarbonStatus)
-async def get_carbon_status():
-    current = await carbon_service.provider.get_current_intensity()
-    p30 = await carbon_service.provider.get_p30_threshold()
+@app.get("/carbon")
+async def get_carbon_status(region: str = Query(default="UK", description="Region code: UK | IN | DE | US")):
+    from app.core.registry import registry
+
+    # Validate region
+    valid_regions = list(registry.providers.keys())
+    if region not in valid_regions:
+        raise HTTPException(status_code=400, detail=f"Invalid region '{region}'. Must be one of: {valid_regions}")
+
+    optimization = await registry.get_best_region()
+    current = optimization["intensities"][region]
+    p30 = await registry.providers[region].get_p30_threshold()
+
     return {
         "current": current,
         "p30_threshold": p30,
         "is_green": current <= p30,
-        "forecast_summary": f"Next 48h P30 is {p30} gCO2/kWh"
+        "region": region,
+        "global_optimization": optimization,
+        "forecast_summary": f"Optimal Global Region: {optimization['best_region']} | Viewing: {region}"
     }
 
 import json
@@ -83,9 +102,10 @@ async def submit_task(request: TaskCreate, session: Session = Depends(get_sessio
     db = DBService(session)
     request_id = str(uuid.uuid4())
     
-    # Get initial metrics
-    current_intensity = await carbon_service.provider.get_current_intensity()
-    p30 = await carbon_service.provider.get_p30_threshold()
+    # Get initial metrics (UK as default baseline)
+    uk_provider = carbon_service.registry.providers["UK"]
+    current_intensity = await uk_provider.get_current_intensity()
+    p30 = await uk_provider.get_p30_threshold()
     
     # Create Task 
     # SQLite requires dict payload to be dumped to a string since JSON schema column type is being mocked
@@ -114,17 +134,22 @@ async def submit_task(request: TaskCreate, session: Session = Depends(get_sessio
         "logs": []
     }
     
-    # Execute graph (this might pause at scheduler)
+    # Execute graph (this might pause at scheduler or shift region)
     final_state = await app_graph.ainvoke(state_input, config=config)
     
     # Update task based on final state
     updated_task = db.get_task(request_id)
+    updated_task.assigned_region = final_state.get("assigned_region", "UK")
+    updated_task.routing_logic = final_state.get("routing_logic")
+    updated_task.regional_intensities_snapshot = json.dumps(final_state.get("regional_intensities", {}))
+
     if final_state.get("is_paused"):
         updated_task.status = TaskStatus.PAUSED
     elif final_state.get("output"):
         updated_task.status = TaskStatus.COMPLETED
         updated_task.result = json.dumps({"output": final_state["output"]})
         updated_task.completed_at = datetime.utcnow()
+        updated_task.execution_region = updated_task.assigned_region
         updated_task.carbon_saved = final_state.get("emissions_saved", 0)
         updated_task.actual_emissions = updated_task.baseline_emissions - updated_task.carbon_saved
     
@@ -139,6 +164,7 @@ async def submit_task(request: TaskCreate, session: Session = Depends(get_sessio
         "priority": updated_task.priority.value,
         "current_intensity": current_intensity,
         "p30_threshold": updated_task.p30_threshold,
+        "assigned_region": updated_task.assigned_region,
         "input_data": updated_task.input_data,
         "emissions_saved": updated_task.carbon_saved,
         "created_at": updated_task.created_at,

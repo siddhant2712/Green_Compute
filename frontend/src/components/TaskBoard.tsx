@@ -10,10 +10,19 @@ interface Props {
   mode?: 'submission' | 'queue';
 }
 
+const REGIONS = [
+  { value: 'auto', label: '🌐 Auto (AI Optimizer)', flag: '🌐' },
+  { value: 'UK',   label: '🇬🇧 United Kingdom',     flag: '🇬🇧' },
+  { value: 'IN',   label: '🇮🇳 India (Central)',     flag: '🇮🇳' },
+  { value: 'DE',   label: '🇩🇪 Germany',             flag: '🇩🇪' },
+  { value: 'US',   label: '🇺🇸 USA (Cal-Grid)',      flag: '🇺🇸' },
+];
+
 const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission' }) => {
   const [prompt, setPrompt] = useState('');
   const [taskName, setTaskName] = useState('');
   const [priority, setPriority] = useState('deferrable');
+  const [targetRegion, setTargetRegion] = useState('auto');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,10 +31,13 @@ const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission
     
     setIsSubmitting(true);
     try {
-      const task = await submitTask(priority, { prompt, name: taskName });
+      const payload: Record<string, string> = { prompt, name: taskName };
+      if (targetRegion !== 'auto') payload.preferred_region = targetRegion;
+      const task = await submitTask(priority, payload);
       onTaskSubmitted(task);
       setPrompt('');
       setTaskName('');
+      setTargetRegion('auto');
     } catch (err) {
       console.error(err);
     } finally {
@@ -75,6 +87,7 @@ const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission
               />
             </div>
             <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+              {/* Priority Selector */}
               <div className="relative w-full md:w-auto">
                 <select
                   value={priority}
@@ -88,6 +101,23 @@ const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission
                    <Clock size={14} />
                 </div>
               </div>
+
+              {/* Region Selector */}
+              <div className="relative w-full md:w-auto">
+                <select
+                  value={targetRegion}
+                  onChange={(e) => setTargetRegion(e.target.value)}
+                  className="w-full md:w-auto bg-white/10 border border-white/10 rounded-full px-8 py-4 text-sm font-semibold focus:outline-none text-slate-200 backdrop-blur-md appearance-none cursor-pointer pr-12"
+                >
+                  {REGIONS.map(r => (
+                    <option key={r.value} value={r.value} className="bg-black">{r.label}</option>
+                  ))}
+                </select>
+                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                  <span className="text-xs font-bold">{REGIONS.find(r => r.value === targetRegion)?.flag}</span>
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={isSubmitting || !prompt}
@@ -155,6 +185,10 @@ const TaskBoard: React.FC<Props> = ({ tasks, onTaskSubmitted, mode = 'submission
                     </p>
                     <p className="text-[10px] font-medium text-slate-500 flex items-center gap-2">
                        {task.priority === 'urgent' ? '⚡ Urgent Priority' : '🌱 Carbon-Aware'}
+                       <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                       {task.assigned_region && (
+                         <span className="text-blue-400/80 font-bold uppercase tracking-tighter">NODE: {task.assigned_region}</span>
+                       )}
                        <span className="w-1 h-1 rounded-full bg-slate-700"></span>
                        {new Date(task.created_at || "").toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>

@@ -15,6 +15,8 @@ class AgentState(TypedDict):
     max_delay_hours: int
     p30_threshold: float
     current_intensity: float
+    assigned_region: str
+    routing_logic: str
     
     # Execution State
     is_paused: bool

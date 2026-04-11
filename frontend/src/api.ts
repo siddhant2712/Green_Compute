@@ -11,6 +11,12 @@ export interface CarbonStatus {
   p30_threshold: number;
   is_green: boolean;
   forecast_summary: string;
+  region?: string;
+  global_optimization?: {
+    best_region: string;
+    intensities: Record<string, number>;
+    scores: Record<string, number>;
+  };
 }
 
 export interface TaskResponse {
@@ -20,13 +26,15 @@ export interface TaskResponse {
   input_data: string | null;
   current_intensity: number | null;
   p30_threshold: number | null;
+  assigned_region?: string;
+  routing_logic?: string;
   emissions_saved: number;
   created_at: string;
   result?: { output: string };
 }
 
-export const getCarbonStatus = async () => {
-  const response = await api.get<CarbonStatus>('/carbon');
+export const getCarbonStatus = async (region: string = 'UK') => {
+  const response = await api.get<CarbonStatus>('/carbon', { params: { region } });
   return response.data;
 };
 

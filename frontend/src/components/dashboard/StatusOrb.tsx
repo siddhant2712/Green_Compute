@@ -4,15 +4,26 @@ import { motion } from 'framer-motion';
 interface Props {
   isGreen: boolean;
   intensity: number;
+  region?: string;
 }
 
-const StatusOrb: React.FC<Props> = ({ isGreen, intensity }) => {
+const REGION_NAMES: Record<string, string> = {
+  UK: '🇬🇧 United Kingdom',
+  IN: '🇮🇳 India',
+  DE: '🇩🇪 Germany',
+  US: '🇺🇸 USA (West)',
+};
+
+const StatusOrb: React.FC<Props> = ({ isGreen, intensity, region = 'UK' }) => {
   return (
     <div className="glass p-8 rounded-[32px] h-full flex flex-col items-center justify-between relative overflow-hidden group">
       <div className="w-full">
         <h3 className="text-[10px] font-bold tracking-[0.2em] uppercase text-white mb-1">
           Grid Status: <span className={isGreen ? "text-green-500" : "text-red-500"}>{isGreen ? "Green" : "Dirty"}</span>
         </h3>
+        <p className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">
+          {REGION_NAMES[region] ?? region}
+        </p>
       </div>
 
       <div className="relative flex items-center justify-center py-12">

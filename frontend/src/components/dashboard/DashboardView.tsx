@@ -1,17 +1,20 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import IntensityGraph from './IntensityGraph';
 import StatusOrb from './StatusOrb';
 import ActiveTasksCard from './ActiveTasksCard';
-import { EnergyMixCard, SavingsSummaryCard } from './SummaryCards';
+import GlobalOptimizerWidget from './GlobalOptimizerWidget';
+import { SavingsSummaryCard } from './SummaryCards';
 import type { CarbonStatus, TaskResponse } from '../../api';
-import { motion } from 'framer-motion';
 
 interface Props {
   status: CarbonStatus | null;
   tasks: TaskResponse[];
+  selectedRegion: string;
+  onRegionChange: (region: string) => void;
 }
 
-const DashboardView: React.FC<Props> = ({ status, tasks }) => {
+const DashboardView: React.FC<Props> = ({ status, tasks, selectedRegion, onRegionChange }) => {
   if (!status) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -33,7 +36,7 @@ const DashboardView: React.FC<Props> = ({ status, tasks }) => {
           transition={{ duration: 0.6 }}
           className="lg:col-span-12 xl:col-span-5 h-[480px]"
         >
-          <IntensityGraph current={status.current} p30={status.p30_threshold} />
+          <IntensityGraph current={status.current} p30={status.p30_threshold} region={selectedRegion} />
         </motion.div>
 
         <motion.div 
@@ -42,7 +45,7 @@ const DashboardView: React.FC<Props> = ({ status, tasks }) => {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="lg:col-span-6 xl:col-span-3 h-[480px]"
         >
-          <StatusOrb isGreen={status.is_green} intensity={status.current} />
+          <StatusOrb isGreen={status.is_green} intensity={status.current} region={selectedRegion} />
         </motion.div>
 
         <motion.div 
@@ -61,16 +64,22 @@ const DashboardView: React.FC<Props> = ({ status, tasks }) => {
            initial={{ opacity: 0, y: 20 }}
            animate={{ opacity: 1, y: 0 }}
            transition={{ duration: 0.6, delay: 0.3 }}
-           className="h-[280px]"
+           className="h-[380px]"
         >
-          <EnergyMixCard />
+          {status.global_optimization && (
+            <GlobalOptimizerWidget
+              optimization={status.global_optimization}
+              selectedRegion={selectedRegion}
+              onRegionChange={onRegionChange}
+            />
+          )}
         </motion.div>
         
         <motion.div
            initial={{ opacity: 0, y: 20 }}
            animate={{ opacity: 1, y: 0 }}
            transition={{ duration: 0.6, delay: 0.4 }}
-           className="h-[280px]"
+           className="h-[380px]"
         >
           <SavingsSummaryCard />
         </motion.div>
