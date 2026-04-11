@@ -1,120 +1,121 @@
-# 🧪 Green-Compute: The Ultimate In-Depth Guide
+# 🧪 Green-Compute: The Ultimate Project Thesis & Technical Manual
 
-This document provides a comprehensive technical breakdown of every component, file, and logic flow in the Green-Compute project. It is designed to prepare you for a professional presentation or technical viva.
-
----
-
-## 💡 Project Philosophy
-**Green-Compute** solves the "Carbon Spike" problem in AI. Standard AI workloads run the moment they are requested, regardless of whether the electricity grid is currently powered by coal or wind. This project introduces **Adaptive Scheduling**, which uses AI agents to negotiate execution times based on grid carbon intensity forecasts.
+This document is the definitive technical authority for the **Green-Compute** ecosystem. It covers the architectural design, algorithmic logic, and operational instructions required for a professional presentation, technical viva, or high-level audit.
 
 ---
 
-## 🏗️ Core Architecture & Logic
+## 🏛️ 1. Project Philosophy & Motivation
 
-### 1. The Carbon Intelligence Engine
-The system's "Decision IQ" comes from how it interprets grid data.
-- **P30 Strategy**: The system doesn't just look for "low" intensity; it looks for the **lowest 30%** of the next 48 hours. By calculating this percentile, the system ensures it always picks the "greenest windows" available in the near future.
+### The Problem
+AI is energy-intensive. Training a single large model can emit as much CO₂ as five cars over their lifetimes. Most AI systems run tasks immediately upon request, often during "Peak Dirty Hours" when the electricity grid relies on coal or gas.
 
-### 2. Multi-Agent Orchestration (LangGraph)
-Unlike linear scripts, Green-Compute uses a **State Graph**. The task moves through "Nodes" (Agents), and each node can modify the task's state or decide it needs to pause.
-- **Triage**: Uses LLM reasoning to classify sensitivity.
-- **Scheduler**: The "Gatekeeper" that compares real-time telemetry vs. P30 targets.
+### The Solution: Green-Compute
+Green-Compute is a **Carbon-Aware Middleware**. It decouples the *request time* from the *execution time*. By utilizing regional grid forecasts, it intelligently pauses "deferrable" AI workloads until the grid is powered by renewables (Wind, Solar, Nuclear).
 
 ---
 
-## 📂 Exhaustive File-by-File Directory
+## 🛠️ 2. The Master Tech Stack
 
-### 🌍 Root
-- `docker-compose.yml`: Orchestrates the containerized version of the app (Database + Backend + Frontend).
-- `.gitignore`: Prevents sensitive data (.env) and heavy folders (node_modules) from being uploaded to GitHub.
-- `package.json`: Main project configuration for Node environments.
+| Layer | Technology | Rationale |
+| :--- | :--- | :--- |
+| **Backend Framework** | **FastAPI (Python)** | High-performance, asynchronous, and provides automatic Swagger documentation. |
+| **Orchestration** | **LangGraph** | Enables "Stateful Multi-Agent" workflows that can pause, loop, and resume intelligently. |
+| **Intelligence** | **Gemini 1.5 Flash** | Used for Triage (classifying task urgency) and Report Generation. |
+| **Database** | **SQLModel / SQLite** | Combines SQLAlchemy with Pydantic for clean, persistent local storage. |
+| **Frontend** | **React (Vite)** | Modern, fast, and component-based UI development. |
+| **Styling** | **Tailwind CSS v4** | Advanced utility-first CSS for premium 'Pro' aesthetics. |
+| **Visualizations** | **Recharts** | Interactive, high-fidelity SVG graphs for carbon telemetry. |
+| **Security** | **HMAC-SHA256** | Cryptographic signing for ESG certificates to prevent tampering. |
+
+---
+
+## 🧠 3. Project "Brain": Multi-Agent Logic (LangGraph)
+
+Unlike standard scripts, we use a **State Graph** (`agents/graph.py`). Every task follows a lifecycle:
+
+1.  **Triage Node**: The agent analyzes the `input_data`. If the user says "ASAP" or "URGENT", it marks the task for immediate execution. Otherwise, it defaults to "Deferrable".
+2.  **Scheduler Node**: The most critical node. It fetches live grid data and compares the `current_intensity` against the `P30_threshold`.
+    -   *If Current <= P30*: The task moves to **Execution**.
+    -   *If Current > P30*: The graph sets `is_paused = True` and saves the state to the DB.
+3.  **Execution Node**: Simulates the AI workload, calculates actual carbon saved, and marks the task as `COMPLETED`.
+
+---
+
+## 📈 4. The Intelligence: P30 Scheduling Math
+
+The system uses a **P30 (30th Percentile) Strategy** to define "Green Energy."
+
+*   **Logic**: We fetch the 48-hour intensity forecast from the National Grid.
+*   **Calculation**: We calculate the 30th percentile of these values. For example, if the grid fluctuates between 50g and 250g, the P30 might be **80g**.
+*   **Target**: Any value below 80g is considered "Optimal Green." We only run deferrable tasks during these windows.
+*   **Safety Net**: Every task has a `deadline` (Default 24h). If the deadline is reached and the grid is still dirty, we run the task anyway to ensure service reliability.
+
+---
+
+## 📂 5. Exhaustive Directory Structure
 
 ### ⚙️ Backend (`backend/app/`)
-#### `/agents`
-- `graph.py`: **Entry Point for Logic.** Defines the "map" of how a task travels from Triage to Completion.
-- `nodes.py`: **The Workers.** Contains the actual Python functions for each agent (Triage logic, Scheduler math, Execution simulation).
-- `state.py`: **The Memory.** Defines the `AgentState` dictionary—what data "travels" with the task as it moves through the graph.
-
-#### `/core`
-- `carbon_service.py`: **Data Fetcher.** Contains the `UKCarbonProvider` class that makes HTTP requests to the UK Grid API and calculates the P30 threshold.
-- `config.py`: **Settings.** Uses `pydantic-settings` to manage environment variables like API keys and database URLs.
-- `llm.py`: **AI Connector.** Logic to initialize Gemini or OpenAI, including the **MockLLM** fallback I built for you.
-
-#### `/db`
-- `models.py`: **Database Structure.** Defines the Tables (`Task`, `TaskEvent`, `CarbonHistory`) using SQLModel.
-- `service.py`: **Database Controller.** Functions to `create_task`, `get_task`, and `log_event`.
-
-#### `/schemas`
-- `task.py`: **Data Format.** Defines the JSON structure for API requests and responses (e.g., what fields the website expects to see).
-
-#### `/utils`
-- `reporting.py`: **PDF Generator.** Uses `FPDF` to draw the ESG report and `qrcode` to generate signable verification links.
-- `security.py`: **Trust Layer.** Handles the HMAC-SHA256 logic to ensure certificates aren't tampered with.
-
-#### `/workers`
-- `main.py`: **The Background Engine.** A standard loop that keeps tasks alive while the main API is busy.
-
-#### `main.py`
-- **The API Router.** The central script that handles incoming website requests (POST task, GET status).
+-   `main.py`: The entry point. Handles the API routes (`/tasks`, `/carbon`, `/certificate`).
+-   `agents/graph.py`: Defines the LangGraph workflow structure.
+-   `agents/nodes.py`: The actual Python logic for each agent (Triage, Scheduler, Exec).
+-   `core/carbon_service.py`: Connects to the **National Grid ESO API**.
+-   `core/llm.py`: Manages AI connections (Gemini) and the **MockLLM** fallback.
+-   `db/models.py`: Defines the database schema (SQLModel).
+-   `utils/reporting.py`: Generates the **ESG Carbon Certificates (PDF)**.
+-   `utils/security.py`: Handles **HMAC signing** and QR code data verification.
+-   `workers/main.py`: The background process that re-checks paused tasks every 60 seconds.
 
 ### 💻 Frontend (`frontend/src/`)
-- `main.tsx`: The starting point that mounts the React app into the HTML.
-- `App.tsx`: **The Main Layout.** Manages the tabs (Dashboard vs Verification) and global task state.
-- `api.ts`: **The Bridge.** Centralized Axios configuration for calling your Python backend.
-- `index.css`: **Visual Identity.** Contains the "True Black" theme and glassmorphism styling.
-
-#### `/components`
-- `CarbonWidget.tsx`: **Data Visualization.** Displays the 48h intensity graph and the "DIRTY/GREEN" status indicator.
-- `TaskBoard.tsx`: **User Interaction.** The input field for dispatching jobs and the data table showing the queue.
-
-#### `/pages`
-- `VerificationPage.tsx`: **Scanner Destination.** The "mobile-first" page that opens when someone scans a certificate QR code.
+-   `App.tsx`: The layout engine and Tab-based navigation controller.
+-   `components/dashboard/`: Contains the high-fidelity Pro Dashboard cards.
+    -   `StatusOrb.tsx`: The glowing status indicator.
+    -   `IntensityGraph.tsx`: The 48h forecast chart.
+    -   `ActiveTasksCard.tsx`: The running workload list.
+-   `components/tabs/`: Contains the page views (Compute, Reports, Settings).
+-   `api.ts`: Centralizes all Axios calls to the backend.
 
 ---
 
-## 🚀 How to Run (Direct Instructions)
+## 🔌 6. API Reference
 
-### 1. Prerequisite Checklist
-- [ ] Install **Python 3.10+**
-- [ ] Install **Node.js 18+**
-- [ ] Git Bash or PowerShell terminal
+### Internal (Our App)
+-   `GET /carbon`: Returns live grid intensity, P30 threshold, and "GREEN/DIRTY" status.
+-   `POST /tasks`: Submits a new AI workload for orchestration.
+-   `GET /tasks`: Lists all historical tasks (used for persistence).
+-   `GET /certificate/{id}`: Generates a signed PDF sustainability receipt.
 
-### 2. Backend Boot-up
-```powershell
-# 1. Enter folder
-cd C:\Users\tanu1\Desktop\Green_Compute\backend
-
-# 2. Setup environment
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-# 3. Install packages
-pip install -r requirements.txt
-
-# 4. Start Server
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-*Wait until you see "Uvicorn running on http://0.0.0.0:8000"*
-
-### 3. Frontend Boot-up (New Terminal)
-```powershell
-# 1. Enter folder
-cd C:\Users\tanu1\Desktop\Green_Compute\frontend
-
-# 2. Install site tools
-npm install
-
-# 3. Start Site
-npm run dev
-```
-*Wait for "Vite dev server running at http://localhost:3006/"*
-
-### 4. Direct Access
-- **Dashboard**: http://localhost:3006
-- **API Documentation**: http://localhost:8000/docs (FastAPI Swagger UI)
+### External (Our Sources)
+-   **UK Carbon Intensity API**: Public resource providing real-time grid data.
+-   **Google Gemini API**: Provides the reasoning capabilities for our agents.
 
 ---
 
-## 🛠️ Performance & Scalability
-- **Concurrency**: The system uses `asyncio`, allowing it to handle hundreds of tasks simultaneously without blocking.
-- **Persistence**: Using **SQLite** ensures that even if the power goes out, your tasks and carbon savings are saved in `greencompute.db`.
+## 🏁 7. How to Run (Master Instructions)
+
+### Backend
+1.  `cd backend`
+2.  `python -m venv venv` 
+3.  `source venv/bin/activate` (or `.\venv\Scripts\Activate.ps1`)
+4.  `pip install -r requirements.txt`
+5.  `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
+
+### Frontend
+1.  `cd frontend`
+2.  `npm install`
+3.  `npm run dev` (Runs on http://localhost:5173)
+
+---
+
+## ❓ 8. Frequently Asked Questions (Viva Prep)
+
+**Q: How is this "Agentic"?**
+A: It's agentic because the software uses LLM reasoning to decide *when* to execute a task based on dynamic environment data (carbon intensity), rather than following a hard-coded script.
+
+**Q: What happens if the Gemini API key is missing?**
+A: The system automatically falls back to a **MockLLM** I built. It simulates the AI reasoning so the project remains fully functional for demonstrations.
+
+**Q: How do you prevent data loss on page reload?**
+A: We use a persistent **SQLite database**. Every time the frontend loads, it calls `GET /tasks` to restore the entire history and state of all workloads.
+
+**Q: Is the certificate authentic?**
+A: Yes. Every certificate is signed using **HMAC-SHA256** with a secret key. If the data is changed, the signature will no longer match, making it audit-proof.
